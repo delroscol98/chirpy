@@ -23,9 +23,9 @@ func main() {
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/app/", http.StripPrefix("/app/", cfg.middlewareMetricsInc(handler)))
 
-	serveMux.HandleFunc("GET /healthz", handlerReadiness)
-	serveMux.HandleFunc("GET /metrics", cfg.handlerWriteRequestsNumber)
-	serveMux.HandleFunc("POST /reset", cfg.handlerResetRequestsNumber)
+	serveMux.HandleFunc("GET /api/healthz", handlerReadiness)
+	serveMux.HandleFunc("GET /api/metrics", cfg.handlerWriteRequestsNumber)
+	serveMux.HandleFunc("POST /api/reset", cfg.handlerResetRequestsNumber)
 
 	server := &http.Server{
 		Handler: serveMux,
@@ -79,7 +79,7 @@ func (cfg *apiConfig) handlerResetRequestsNumber(w http.ResponseWriter, r *http.
 	}
 	defer r.Body.Close()
 
-	fmt.Printf("Recieved from body handlerResetRequestsNumber: %s\n", string(body))
+	fmt.Printf("Recieved request body from handlerResetRequestsNumber: %s\n", string(body))
 
 	cfg.fileserverHits.Store(0)
 
