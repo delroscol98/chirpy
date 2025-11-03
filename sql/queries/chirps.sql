@@ -12,3 +12,7 @@ INSERT INTO chirps(
   $1,
   $2
 ) RETURNING *;
+
+-- name: GetAllChirpsAsc :many
+SELECT * FROM chirps
+ORDER BY chirps.created_at ASC;
