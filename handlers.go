@@ -5,17 +5,35 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/google/uuid"
 )
 
+func respondWithJSON(w http.ResponseWriter, code int, payload any) error {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(code)
+	w.Write(response)
+	return nil
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) error {
+	return respondWithJSON(w, code, map[string]string{"error": msg})
+}
+
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	_, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
-
-	fmt.Printf("Received request body from handlerReadiness: %s\n", string(body))
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -23,14 +41,12 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerWriteRequestsNumber(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	_, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
-
-	fmt.Printf("Received request body from handlerWriteRequestsNumber: %s\n", string(body))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -46,37 +62,32 @@ func (cfg *apiConfig) handlerWriteRequestsNumber(w http.ResponseWriter, r *http.
 }
 
 func (cfg *apiConfig) handlerResetRequestsNumber(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	fmt.Println(cfg.platform)
+	if cfg.platform != "dev" {
+		errMsg := "This extrememly dangerous endpoint can only be accessed in a local environment"
+		respondWithError(w, 403, errMsg)
+		return
+	}
+
+	defer r.Body.Close()
+	_, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
 
-	fmt.Printf("Recieved request body from handlerResetRequestsNumber: %s\n", string(body))
+	err = cfg.database.DeleteAllUsers(r.Context())
+	if err != nil {
+		errMsg := fmt.Sprintf("Error deleting all users: %v", err)
+		respondWithError(w, 500, errMsg)
+		return
+	}
 
 	cfg.fileserverHits.Store(0)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf=8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("FileserverHits set back to 0"))
-}
-
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
-	response, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(code)
-	w.Write(response)
-	return nil
-}
-
-func respondWithError(w http.ResponseWriter, code int, msg string) error {
-	return respondWithJSON(w, code, map[string]string{"error": msg})
 }
 
 func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
@@ -113,5 +124,48 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	cleanedBody := cleanBody(params.Body)
 	respondWithJSON(w, 200, responseBody{
 		CleanedBody: cleanedBody,
+	})
+}
+
+func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type requestBody struct {
+		Email string `json:"email"`
+	}
+	type User struct {
+		Id         uuid.UUID `json:"id"`
+		Created_at time.Time `json:"created_at"`
+		Updated_at time.Time `json:"updated_at"`
+		Email      string    `json:"email"`
+	}
+
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error reading request body: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(data, &params)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error unmarshalling data: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	user, err := cfg.database.CreateUser(r.Context(), params.Email)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error creating new user: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	respondWithJSON(w, 201, User{
+		Id:         uuid.New(),
+		Created_at: time.Now(),
+		Updated_at: time.Now(),
+		Email:      user.Email,
 	})
 }
