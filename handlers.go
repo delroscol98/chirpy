@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,4 +60,57 @@ func (cfg *apiConfig) handlerResetRequestsNumber(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", "text/plain; charset=utf=8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("FileserverHits set back to 0"))
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(code)
+	w.Write(response)
+	return nil
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) error {
+	return respondWithJSON(w, code, map[string]string{"error": msg})
+}
+
+func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type requestBody struct {
+		Body string `json:"body"`
+	}
+	type responseBody struct {
+		Valid bool `json:"valid"`
+	}
+
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error reading request body: %v\n", err)
+		respondWithError(w, 500, errMsg)
+		return
+	}
+
+	params := requestBody{}
+	err = json.Unmarshal(data, &params)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error unmarshalling data: %v\n", err)
+		respondWithError(w, 500, errMsg)
+		return
+	}
+
+	if len(params.Body) > 140 {
+		errMsg := "chirps must be at most 140 characters long"
+		respondWithError(w, 400, errMsg)
+		return
+	}
+
+	respondWithJSON(w, 200, responseBody{
+		Valid: true,
+	})
 }
