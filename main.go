@@ -43,7 +43,8 @@ func main() {
 	serveMux.Handle("/app/", http.StripPrefix("/app/", cfg.middlewareMetricsInc(handler)))
 
 	serveMux.HandleFunc("GET /api/healthz", handlerReadiness)
-	serveMux.HandleFunc("POST /api/chirps", cfg.handlerValidateChirp)
+	serveMux.HandleFunc("POST /api/chirps", cfg.handlerCreateChirp)
+	serveMux.HandleFunc("GET /api/chirps", cfg.handlerGetChirps)
 	serveMux.HandleFunc("POST /api/users", cfg.handlerCreateUsers)
 	serveMux.HandleFunc("GET /admin/metrics", cfg.handlerWriteRequestsNumber)
 	serveMux.HandleFunc("POST /admin/reset", cfg.handlerResetRequestsNumber)
