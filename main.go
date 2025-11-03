@@ -1,20 +1,35 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/delroscol98/chirpy/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	database       *database.Queries
 }
 
 func main() {
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Error opening database")
+	}
+	dbQueries := database.New(db)
+
 	const filePathRoot = "."
 	const port = "8080"
 
-	var cfg apiConfig
+	cfg := apiConfig{
+		database: dbQueries,
+	}
 
 	handler := http.FileServer(http.Dir(filePathRoot))
 
@@ -31,7 +46,7 @@ func main() {
 		Addr:    ":" + port,
 	}
 
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
