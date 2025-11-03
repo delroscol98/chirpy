@@ -86,7 +86,7 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		Body string `json:"body"`
 	}
 	type responseBody struct {
-		Valid bool `json:"valid"`
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	data, err := io.ReadAll(r.Body)
@@ -110,7 +110,8 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cleanedBody := cleanBody(params.Body)
 	respondWithJSON(w, 200, responseBody{
-		Valid: true,
+		CleanedBody: cleanedBody,
 	})
 }
