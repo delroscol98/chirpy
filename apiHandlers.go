@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type ChirpRequestBody struct {
+	Body   string    `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+type ChirpResponseBody struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
 // NOTE: GET requests
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	_, err := io.ReadAll(r.Body)
@@ -26,20 +39,8 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 }
 
 // NOTE: POST requests
-func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-
-	type requestBody struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
-	}
-	type Chirp struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    uuid.UUID `json:"user_id"`
-	}
 
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -48,7 +49,7 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	params := requestBody{}
+	params := ChirpRequestBody{}
 	err = json.Unmarshal(data, &params)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error unmarshalling data: %v\n", err)
@@ -72,13 +73,35 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, Chirp{
+	respondWithJSON(w, http.StatusCreated, ChirpResponseBody{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
 		Body:      chirp.Body,
 		UserID:    chirp.UserID,
 	})
+}
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.database.GetAllChirpsAsc(r.Context())
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting chirps: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	out := make([]ChirpResponseBody, 0, len(chirps))
+	for _, chirp := range chirps {
+		out = append(out, ChirpResponseBody{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, out)
 }
 
 func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
