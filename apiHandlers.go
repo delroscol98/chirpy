@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/delroscol98/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -25,20 +26,25 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 }
 
 // NOTE: POST requests
-func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	type requestBody struct {
-		Body string `json:"body"`
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
 	}
-	type responseBody struct {
-		CleanedBody string `json:"cleaned_body"`
+	type Chirp struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
 	}
 
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error reading request body: %v\n", err)
-		respondWithError(w, 500, errMsg)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
 		return
 	}
 
@@ -46,19 +52,32 @@ func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(data, &params)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error unmarshalling data: %v\n", err)
-		respondWithError(w, 500, errMsg)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
 		return
 	}
 
 	if len(params.Body) > 140 {
 		errMsg := "chirps must be at most 140 characters long"
-		respondWithError(w, 400, errMsg)
+		respondWithError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
-	cleanedBody := cleanBody(params.Body)
-	respondWithJSON(w, 200, responseBody{
-		CleanedBody: cleanedBody,
+	chirp, err := cfg.database.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   cleanBody(params.Body),
+		UserID: params.UserID,
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Error creating chirp: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
 	})
 }
 
@@ -69,10 +88,10 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 		Email string `json:"email"`
 	}
 	type User struct {
-		Id         uuid.UUID `json:"id"`
-		Created_at time.Time `json:"created_at"`
-		Updated_at time.Time `json:"updated_at"`
-		Email      string    `json:"email"`
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
 	}
 
 	data, err := io.ReadAll(r.Body)
@@ -98,9 +117,9 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, 201, User{
-		Id:         uuid.New(),
-		Created_at: time.Now(),
-		Updated_at: time.Now(),
-		Email:      user.Email,
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
 	})
 }
