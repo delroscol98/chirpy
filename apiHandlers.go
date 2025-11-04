@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/delroscol98/chirpy/internal/auth"
 	"github.com/delroscol98/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -133,7 +134,8 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	defer r.Body.Close()
 
 	type requestBody struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	type User struct {
 		ID        uuid.UUID `json:"id"`
@@ -157,7 +159,12 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	user, err := cfg.database.CreateUser(r.Context(), params.Email)
+	hashedPw, err := auth.HashPassword(params.Password)
+
+	user, err := cfg.database.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPw,
+	})
 	if err != nil {
 		errMsg := fmt.Sprintf("Error creating new user: %v", err)
 		respondWithError(w, http.StatusInternalServerError, errMsg)
@@ -165,6 +172,59 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, 201, User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	})
+}
+
+func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	type requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	type User struct {
+		ID             uuid.UUID `json:"id"`
+		CreatedAt      time.Time `json:"created_at"`
+		UpdatedAt      time.Time `json:"updated_at"`
+		Email          string    `json:"email"`
+		HashedPassword string    `json:"hashed_password"`
+	}
+
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error reading request body: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	var req requestBody
+	err = json.Unmarshal(data, &req)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error unmarshalling data: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	user, err := cfg.database.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		errMsg := "Incorrect email or password"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	bool, err := auth.CheckPasswordHash(req.Password, user.HashedPassword)
+	if !bool {
+		errMsg := "Incorrect email or password"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, User{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
