@@ -104,6 +104,31 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, out)
 }
 
+func (cfg *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		errMsg := fmt.Sprintf("Error parsing string uuid: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+	chirp, err := cfg.database.GetChirpById(r.Context(), id)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error fetching chirp by ID: %v", err)
+		respondWithError(w, http.StatusNotFound, errMsg)
+		return
+	}
+
+	out := ChirpResponseBody{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
+
+	respondWithJSON(w, http.StatusOK, out)
+}
+
 func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
