@@ -49,7 +49,6 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, errMsg)
 		return
 	}
-
 	params := ChirpRequestBody{}
 	err = json.Unmarshal(data, &params)
 	if err != nil {
@@ -63,10 +62,23 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, errMsg)
 		return
 	}
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting bearer token: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		errMsg := "User unauthorized for this action"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
 
 	chirp, err := cfg.database.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   cleanBody(params.Body),
-		UserID: params.UserID,
+		UserID: userID,
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("Error creating chirp: %v", err)
@@ -183,8 +195,9 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 	defer r.Body.Close()
 
 	type requestBody struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string        `json:"email"`
+		Password         string        `json:"password"`
+		ExpiresInSeconds time.Duration `json:"expires_in_seconds"`
 	}
 
 	type User struct {
@@ -193,6 +206,7 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		UpdatedAt      time.Time `json:"updated_at"`
 		Email          string    `json:"email"`
 		HashedPassword string    `json:"hashed_password"`
+		Token          string    `json:"token"`
 	}
 
 	data, err := io.ReadAll(r.Body)
@@ -210,6 +224,10 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if req.ExpiresInSeconds == 0 || req.ExpiresInSeconds > time.Hour {
+		req.ExpiresInSeconds = time.Hour
+	}
+
 	user, err := cfg.database.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		errMsg := "Incorrect email or password"
@@ -224,10 +242,19 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	token, err := auth.MakeJWT(user.ID, cfg.secret, req.ExpiresInSeconds)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error making JWT: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	respondWithJSON(w, http.StatusOK, User{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+		Token:     token,
 	})
 }
