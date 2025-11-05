@@ -60,3 +60,44 @@ func TestJWT(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBearerToken(t *testing.T) {
+	type Case struct {
+		name               string
+		authorizationSlice map[string][]string
+		bearer             string
+		wantErr            bool
+	}
+
+	cases := []Case{
+		{
+			name: "Bearer Found",
+			authorizationSlice: map[string][]string{
+				"Authorization": {"Bearer 1234567890"},
+			},
+			bearer:  "1234567890",
+			wantErr: false,
+		},
+		{
+			name: "Bearer Not Found",
+			authorizationSlice: map[string][]string{
+				"test": {"Bearer not found"},
+			},
+			bearer:  "",
+			wantErr: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bearer, err := GetBearerToken(c.authorizationSlice)
+			if (err != nil) && !c.wantErr {
+				t.Errorf("GetBearerToken error = %v, wantErr = %v", err, c.wantErr)
+			}
+
+			if bearer != c.bearer {
+				t.Errorf("Bearers don't match. Expected: %v, Actual: %v", c.bearer, bearer)
+			}
+		})
+	}
+}
