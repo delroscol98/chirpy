@@ -46,16 +46,25 @@ func main() {
 	serveMux.Handle("/app/", http.StripPrefix("/app/", cfg.middlewareMetricsInc(handler)))
 
 	serveMux.HandleFunc("GET /api/healthz", handlerReadiness)
+
 	serveMux.HandleFunc("POST /api/chirps", cfg.handlerCreateChirp)
 	serveMux.HandleFunc("GET /api/chirps", cfg.handlerGetChirps)
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", cfg.handlerGetChirpById)
 	serveMux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.handlerDeleteChirpByID)
+
 	serveMux.HandleFunc("POST /api/users", cfg.handlerCreateUsers)
 	serveMux.HandleFunc("PUT /api/users", cfg.handlerUpdatedUserEmailPassword)
+
 	serveMux.HandleFunc("POST /api/login", cfg.handlerGetUserByEmail)
+
 	serveMux.HandleFunc("POST /api/refresh", cfg.handlerGetRefreshToken)
+
 	serveMux.HandleFunc("POST /api/revoke", cfg.handlerRevokeRefreshToken)
+
+	serveMux.HandleFunc("POST /api/polka/webhooks", cfg.handlerUpgradeUserChirpyRed)
+
 	serveMux.HandleFunc("GET /admin/metrics", cfg.handlerWriteRequestsNumber)
+
 	serveMux.HandleFunc("POST /admin/reset", cfg.handlerResetRequestsNumber)
 
 	server := &http.Server{
