@@ -56,9 +56,10 @@ func (cfg *apiConfig) handlerUpdatedUserEmailPassword(w http.ResponseWriter, r *
 	})
 
 	respondWithJSON(w, http.StatusOK, UserResponseBody{
-		ID:        user.ID,
-		UpdatedAt: time.Now(),
-		Email:     user.Email,
+		ID:          user.ID,
+		UpdatedAt:   time.Now(),
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	})
 }
 
@@ -93,9 +94,10 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondWithJSON(w, 201, UserResponseBody{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	})
 }

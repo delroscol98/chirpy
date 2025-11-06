@@ -32,4 +32,12 @@ type UserResponseBody struct {
 	HashedPassword string    `json:"hashed_password"`
 	Token          string    `json:"token"`
 	RefreshToken   string    `json:"refresh_token"`
+	IsChirpyRed    bool      `json:"is_chirpy_red"`
+}
+
+type WebhookRequestBody struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID string `json:"user_id"`
+	} `json:"data"`
 }
