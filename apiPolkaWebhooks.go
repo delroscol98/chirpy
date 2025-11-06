@@ -6,10 +6,24 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/delroscol98/chirpy/internal/auth"
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerUpgradeUserChirpyRed(w http.ResponseWriter, r *http.Request) {
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting API key: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	if apiKey != cfg.polka_key {
+		errMsg := "apiKey does not match polka_key"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
