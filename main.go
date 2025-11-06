@@ -51,6 +51,8 @@ func main() {
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", cfg.handlerGetChirpById)
 	serveMux.HandleFunc("POST /api/users", cfg.handlerCreateUsers)
 	serveMux.HandleFunc("POST /api/login", cfg.handlerGetUserByEmail)
+	serveMux.HandleFunc("POST /api/refresh", cfg.handlerGetRefreshToken)
+	serveMux.HandleFunc("POST /api/revoke", cfg.handlerRevokeRefreshToken)
 	serveMux.HandleFunc("GET /admin/metrics", cfg.handlerWriteRequestsNumber)
 	serveMux.HandleFunc("POST /admin/reset", cfg.handlerResetRequestsNumber)
 
