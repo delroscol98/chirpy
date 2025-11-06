@@ -1,10 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/delroscol98/chirpy/internal/auth"
@@ -195,9 +197,8 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 	defer r.Body.Close()
 
 	type requestBody struct {
-		Email            string        `json:"email"`
-		Password         string        `json:"password"`
-		ExpiresInSeconds time.Duration `json:"expires_in_seconds"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	type User struct {
@@ -207,6 +208,7 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		Email          string    `json:"email"`
 		HashedPassword string    `json:"hashed_password"`
 		Token          string    `json:"token"`
+		RefreshToken   string    `json:"refresh_token"`
 	}
 
 	data, err := io.ReadAll(r.Body)
@@ -224,10 +226,6 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.ExpiresInSeconds == 0 || req.ExpiresInSeconds > time.Hour {
-		req.ExpiresInSeconds = time.Hour
-	}
-
 	user, err := cfg.database.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
 		errMsg := "Incorrect email or password"
@@ -242,19 +240,83 @@ func (cfg *apiConfig) handlerGetUserByEmail(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	token, err := auth.MakeJWT(user.ID, cfg.secret, req.ExpiresInSeconds)
+	token, err := auth.MakeJWT(user.ID, cfg.secret, time.Hour)
 	if err != nil {
 		errMsg := fmt.Sprintf("Error making JWT: %v", err)
 		respondWithError(w, http.StatusInternalServerError, errMsg)
 		return
 	}
 
+	refToken, _ := auth.MakeRefreshToken()
+	refreshToken, err := cfg.database.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refToken,
+		UserID:    user.ID,
+		ExpiresAt: time.Now().Add(time.Hour * 24 * 60),
+		RevokedAt: sql.NullTime{
+			Time:  time.Now(),
+			Valid: false,
+		},
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Error creating refresh token: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
 	w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	respondWithJSON(w, http.StatusOK, User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-		Token:     token,
+		ID:           user.ID,
+		CreatedAt:    user.CreatedAt,
+		UpdatedAt:    user.UpdatedAt,
+		Email:        user.Email,
+		Token:        token,
+		RefreshToken: refreshToken.Token,
 	})
+}
+
+func (cfg *apiConfig) handlerGetRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refToken := strings.TrimSpace(strings.TrimLeft(r.Header.Get("Authorization"), "Bearer"))
+	refreshToken, err := cfg.database.GetRefreshToken(r.Context(), refToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting refresh token: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	if refreshToken.ExpiresAt.Before(time.Now()) {
+		errMsg := "Refresh token is expired"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	if refreshToken.RevokedAt.Valid {
+		errMsg := "Refresh token is revoked"
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	token, err := auth.MakeJWT(refreshToken.UserID, cfg.secret, time.Hour)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error making token: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, struct {
+		Token string `json:"token"`
+	}{
+		Token: token,
+	})
+}
+
+func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refToken := strings.TrimSpace(strings.TrimLeft(r.Header.Get("Authorization"), "Bearer"))
+	err := cfg.database.RevokeRefeshToken(r.Context(), refToken)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error revoking refresh token: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusNoContent, nil)
 }
