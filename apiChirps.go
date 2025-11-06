@@ -112,3 +112,51 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		UserID:    chirp.UserID,
 	})
 }
+
+func (cfg *apiConfig) handlerDeleteChirpByID(w http.ResponseWriter, r *http.Request) {
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting bearer token: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(accessToken, cfg.secret)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error validating access token: %v", err)
+		respondWithError(w, http.StatusForbidden, errMsg)
+		return
+	}
+
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		errMsg := fmt.Sprintf("Error parsing string uuid: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	chirp, err := cfg.database.GetChirpById(r.Context(), chirpID)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting chirp by ID: %v", err)
+		respondWithError(w, http.StatusNotFound, errMsg)
+		return
+	}
+
+	if userID != chirp.UserID {
+		errMsg := "User forbidden for this action"
+		respondWithError(w, http.StatusForbidden, errMsg)
+		return
+	}
+
+	err = cfg.database.DeleteChirpById(r.Context(), database.DeleteChirpByIdParams{
+		ID:     chirpID,
+		UserID: userID,
+	})
+	if err != nil {
+		errMsg := "Error deleting Chirp: Chirp not found"
+		respondWithError(w, http.StatusNotFound, errMsg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusNoContent, nil)
+}
