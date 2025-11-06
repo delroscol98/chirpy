@@ -12,7 +12,7 @@ INSERT INTO users (
   $1,
   $2
 )
-RETURNING users.id, users.created_at, users.updated_at, users.email;
+RETURNING *;
 
 -- name: DeleteAllUsers :exec
 DELETE FROM users;
