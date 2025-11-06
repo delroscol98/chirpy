@@ -26,6 +26,12 @@ type ChirpResponseBody struct {
 	Body      string    `json:"body"`
 	UserID    uuid.UUID `json:"user_id"`
 }
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
 
 // NOTE: GET requests
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
@@ -150,12 +156,6 @@ func (cfg *apiConfig) handlerCreateUsers(w http.ResponseWriter, r *http.Request)
 	type requestBody struct {
 		Password string `json:"password"`
 		Email    string `json:"email"`
-	}
-	type User struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
 	}
 
 	data, err := io.ReadAll(r.Body)
@@ -319,4 +319,60 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.R
 	}
 
 	respondWithJSON(w, http.StatusNoContent, nil)
+}
+
+func (cfg *apiConfig) handlerUpdatedUserEmailPassword(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error reading request body: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	var req requestBody
+	err = json.Unmarshal(data, &req)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error unmarshalling data: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	accessToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error getting access token: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(accessToken, cfg.secret)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error validating access token: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errMsg)
+		return
+	}
+
+	hashedPw, err := auth.HashPassword(req.Password)
+	if err != nil {
+		errMsg := fmt.Sprintf("Error hashing password: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errMsg)
+		return
+	}
+
+	user, err := cfg.database.UpdateUserEmailPassword(r.Context(), database.UpdateUserEmailPasswordParams{
+		Email:          req.Email,
+		HashedPassword: hashedPw,
+		ID:             userID,
+	})
+
+	respondWithJSON(w, http.StatusOK, User{
+		ID:        user.ID,
+		UpdatedAt: time.Now(),
+		Email:     user.Email,
+	})
 }
