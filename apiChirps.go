@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 
 	"github.com/delroscol98/chirpy/internal/auth"
 	"github.com/delroscol98/chirpy/internal/database"
@@ -53,6 +54,13 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 			respondWithError(w, http.StatusInternalServerError, errMsg)
 			return
 		}
+	}
+
+	sortParam := r.URL.Query().Get("sort")
+	if sortParam == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
 	}
 
 	out := make([]ChirpResponseBody, 0, len(chirps))
