@@ -17,6 +17,11 @@ INSERT INTO chirps(
 SELECT * FROM chirps
 ORDER BY chirps.created_at ASC;
 
+-- name: GetAllChirpsByIdAsc :many
+SELECT * FROM chirps
+WHERE user_id = $1
+ORDER BY chirps.created_at ASC;
+
 -- name: GetChirpById :one
 SELECT * FROM chirps
 WHERE chirps.id = $1;
