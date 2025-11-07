@@ -37,11 +37,22 @@ func (cfg *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.database.GetAllChirpsAsc(r.Context())
+	var chirps []database.Chirp
+	authorID, err := uuid.Parse(r.URL.Query().Get("author_id"))
 	if err != nil {
-		errMsg := fmt.Sprintf("Error getting chirps: %v", err)
-		respondWithError(w, http.StatusInternalServerError, errMsg)
-		return
+		chirps, err = cfg.database.GetAllChirpsAsc(r.Context())
+		if err != nil {
+			errMsg := fmt.Sprintf("Error getting chirps: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errMsg)
+			return
+		}
+	} else {
+		chirps, err = cfg.database.GetAllChirpsByIdAsc(r.Context(), authorID)
+		if err != nil {
+			errMsg := fmt.Sprintf("Error getting chirps: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errMsg)
+			return
+		}
 	}
 
 	out := make([]ChirpResponseBody, 0, len(chirps))
